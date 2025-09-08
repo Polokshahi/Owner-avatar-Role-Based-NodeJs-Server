@@ -1,82 +1,126 @@
 const express = require("express");
-const dotenv = require("dotenv");
-dotenv.config();
 const cors = require("cors");
-const app = express();
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.fpvzj8u.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+require("dotenv").config();
+const port = process.env.PORT || 3000;
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-const port = process.env.PORT || 3000;
+// MongoDB connection URI
+const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.fpvzj8u.mongodb.net/?retryWrites=true&w=majority`;
+const client = new MongoClient(uri, { serverApi: { version: ServerApiVersion.v1 } });
 
-app.get("/", (req, res) => {
-    res.send("Server running...");
-});
-
-
-
-
-
-const { MongoClient, ServerApiVersion } = require('mongodb');
-
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    }
-});
-
-// yN9rH66HHPHyLYod
-// nodeJsProject
-
+// Main function
 async function run() {
     try {
-        // Connect the client to the server	(optional starting in v4.7)
+
+        app.get('/', (req, res) => {
+            res.send('server is runing')
+        })
         await client.connect();
+        console.log("MongoDB connected!");
 
-        // all code here
+        // Collections
+        const productCollection = client.db("allProducts").collection("products");
+        const usersCollection = client.db("allProducts").collection("users");
+        const addtoCart = client.db("allProducts").collection("AddtoCartData")
 
-        const database = client.db("allProducts");
-        const productCollection = database.collection("products");
 
-        // get products api 
-        app.get('/allproducts', async (req, res) => {
-            const cursor = productCollection.find();
-            const result = await cursor.toArray();
+        // Get all products
+        app.get("/allproducts", async (req, res) => {
+            const products = await productCollection.find().toArray();
+            res.send(products);
+        });
+
+        // Add a product
+        app.post("/allproducts", async (req, res) => {
+            try {
+                const newProduct = req.body;
+                const result = await productCollection.insertOne(newProduct);
+                res.send(result);
+            } catch (err) {
+                console.error("Add product error:", err);
+                res.status(500).send({ message: "Failed to add product" });
+            }
+        });
+
+        // handle add to cart
+
+
+        app.post("/addtoCart", async (req, res) => {
+            const data = req.body;
+            const result = await addtoCart.insertOne(data)
+            res.send(result);
+            console.log(data);
+
+        })
+
+
+        app.get("/addtoCart", async (req, res) => {
+            try {
+                const result = await addtoCart.find().toArray();
+                res.send(result);
+            } catch (err) {
+                res.send(err)
+            }
+        })
+
+
+       
+
+
+
+
+
+
+
+
+
+        // ===== Users APIs =====
+        // Add new user with default role
+        app.post("/users", async (req, res) => {
+            const user = req.body;
+            const existing = await usersCollection.findOne({ email: user.email });
+            if (existing) return res.send(existing);
+
+            user.role = "user"; // default role
+            const result = await usersCollection.insertOne(user);
             res.send(result);
         });
 
 
 
-
-        // add Product
-
-        app.post('/allproducts', async (req, res) => {
+        // Get all users
+        app.get("/users", async (req, res) => {
             try {
-                const newProduct = req.body; // Access the data sent by client
-                console.log('Received product:', newProduct);
-
-                // Respond back to client
-                res.send({ message: 'Product received successfully', product: newProduct });
-
-                const result = await productCollection.insertOne(newProduct);
-                res.send(result);
-
-
-
-
-
-            } catch (error) {
-                console.error('Error receiving product:', error);
-                res.send({ message: 'Error receiving product' });
+                const users = await usersCollection.find().toArray();
+                res.send(users);
+            } catch (err) {
+                console.error("Get all users error:", err);
+                res.status(500).send({ message: "Failed to get users" });
             }
         });
 
 
 
+        // Get user by email (to check role)
+        app.get("/users/:email", async (req, res) => {
+            const user = await usersCollection.findOne({ email: req.params.email });
+            res.send(user);
+        });
+
+
+
+        // product deleted by admin 
+
+        app.delete('/allproducts/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await productCollection.deleteOne(query);
+            res.send(result);
+        })
 
 
 
@@ -94,20 +138,13 @@ async function run() {
 
 
 
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
-    } finally {
-        // Ensures that the client will close when you finish/error
-        // await client.close();
+    } catch (err) {
+        console.error(err);
     }
 }
+
 run().catch(console.dir);
 
+// Start server
 
-
-
-
-
-app.listen(port, () => {
-    console.log(`Server is running on port ${port}`);
-});
+app.listen(port, () => console.log(`Server running on port ${port}`));
