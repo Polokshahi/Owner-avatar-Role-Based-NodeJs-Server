@@ -50,12 +50,37 @@ async function run() {
 
 
         app.post("/addtoCart", async (req, res) => {
-            const data = req.body;
-            const result = await addtoCart.insertOne(data)
-            res.send(result);
-            console.log(data);
+            try {
+                const { productId, name, price, image, userEmail } = req.body;
 
-        })
+                // 1. Validate required fields
+                if (!productId || !userEmail) {
+                    return res.status(400).json({ success: false, message: "Missing productId or userEmail" });
+                }
+
+                // 2. Check if this product is already in the user's cart
+                const exists = await addtoCart.findOne({ productId, userEmail });
+                if (exists) {
+                    return res.json({ success: false, message: "Product already in cart" });
+                }
+
+                // 3. Insert new item
+                const result = await addtoCart.insertOne({
+                    productId,
+                    name,
+                    price,
+                    image,
+                    userEmail,
+                   
+                });
+
+                res.json({ success: true, insertedId: result.insertedId });
+                console.log("Cart Item Added:", { productId, userEmail });
+            } catch (error) {
+                console.error("Error inserting cart item:", error);
+                res.status(500).json({ success: false, message: "Server error" });
+            }
+        });
 
 
         app.get("/addtoCart", async (req, res) => {
@@ -68,7 +93,28 @@ async function run() {
         })
 
 
-       
+        // app.get("/addtoCart", async(req, res) =>{
+        //     const email = req.params.email;
+        //     const query = {email: email}
+        //     const result = addtoCart.find(query).toArray();
+        //     res.send(result);
+        // })
+
+
+
+
+
+        app.delete("/addtoCart/:id", async(req, res) =>{
+            const id = req.params.id;
+            const deleteQueryById = {productId : (id)}
+            const result = await addtoCart.deleteOne(deleteQueryById);
+            res.send(result);
+            console.log(id);
+
+        })
+
+
+
 
 
 
